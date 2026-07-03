@@ -1,10 +1,13 @@
 import os
 
 from research_agent.store import Store
-from research_agent.tools import fetch_url, list_items, save_item, search_items
+from research_agent.tools import (fetch_feed, fetch_url, list_items, save_item,
+                                  search_items)
 
 SAMPLE = "file://" + os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "examples", "sample_page.html"))
+SAMPLE_FEED = "file://" + os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "fixtures", "sample_feed.xml"))
 
 
 def test_fetch_url_parses_title_text_links():
@@ -35,3 +38,17 @@ def test_list_and_search_tools():
     save_item(s, "Feed", "MCP note", "https://x.com/mcp", "protocol")
     assert list_items(s)["total"] == 1
     assert len(search_items(s, "MCP")["items"]) == 1
+
+
+def test_fetch_feed_parses_entries():
+    out = fetch_feed(SAMPLE_FEED)
+    assert out["feed_title"] == "AI and Automation Feed"
+    assert out["count"] == 2
+    titles = [e["title"] for e in out["entries"]]
+    assert "Agents get better at tool use" in titles
+    assert out["entries"][0]["link"].startswith("https://example.com/")
+
+
+def test_fetch_feed_respects_limit():
+    out = fetch_feed(SAMPLE_FEED, limit=1)
+    assert out["count"] == 1

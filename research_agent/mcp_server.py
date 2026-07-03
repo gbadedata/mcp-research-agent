@@ -42,5 +42,11 @@ def search_items(query: str, limit: int = 10) -> dict:
     return t.search_items(_store, query=query, limit=limit)
 
 
+@mcp.tool()
+def fetch_feed(url: str, limit: int = 10) -> dict:
+    """Parse an RSS or Atom feed and return its recent entries."""
+    return t.fetch_feed(url, limit=limit)
+
+
 if __name__ == "__main__":
     mcp.run()

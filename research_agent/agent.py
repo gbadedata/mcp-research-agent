@@ -10,13 +10,14 @@ from __future__ import annotations
 import json
 
 from .store import Store
-from .tools import fetch_url, list_items, save_item, search_items
+from .tools import fetch_feed, fetch_url, list_items, save_item, search_items
 
 SYSTEM = (
-    "You are a research automation agent. Use the tools to fetch the given sources, "
-    "save the items worth keeping with a one-sentence summary each, then reply with a "
-    "short digest of what you found as concise bullet points. Do not save duplicates. "
-    "When you have written the digest, stop calling tools."
+    "You are a research automation agent. Use the tools to read the given sources "
+    "(fetch_url for a page, fetch_feed for an RSS or Atom feed), save the items worth "
+    "keeping with a one-sentence summary each, then reply with a short digest of what you "
+    "found as concise bullet points. Do not save duplicates. When you have written the "
+    "digest, stop calling tools."
 )
 
 TOOL_SCHEMAS = [
@@ -63,12 +64,25 @@ TOOL_SCHEMAS = [
             "required": ["query"],
         },
     },
+    {
+        "name": "fetch_feed",
+        "description": "Parse an RSS or Atom feed and return its recent entries (title, link, summary).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Feed URL (http(s) or file://)."},
+                "limit": {"type": "integer"},
+            },
+            "required": ["url"],
+        },
+    },
 ]
 
 
 def _dispatch(store: Store) -> dict:
     return {
         "fetch_url": lambda **kw: fetch_url(**kw),
+        "fetch_feed": lambda **kw: fetch_feed(**kw),
         "save_item": lambda **kw: save_item(store, **kw),
         "list_items": lambda **kw: list_items(store, **kw),
         "search_items": lambda **kw: search_items(store, **kw),

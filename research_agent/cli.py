@@ -3,6 +3,7 @@
   python -m research_agent.cli demo                     # offline: MockLLM drives the loop, no API key
   python -m research_agent.cli run --url https://... --url https://...   # real agent (needs ANTHROPIC_API_KEY)
   python -m research_agent.cli serve                    # start the MCP server (stdio)
+  python -m research_agent.cli dashboard --db research_agent.db          # read-only web dashboard + JSON API
   python -m research_agent.cli digest --db research_agent.db
   python -m research_agent.cli tools
 """
@@ -88,6 +89,14 @@ def _cmd_run(args):
     return 0
 
 
+def _cmd_dashboard(args):
+    import uvicorn
+    from .dashboard import create_app
+    from .store import Store
+    print(f"Dashboard on http://{args.host}:{args.port}  (db: {args.db})")
+    uvicorn.run(create_app(Store(args.db)), host=args.host, port=args.port, log_level="warning")
+
+
 def _cmd_initdb(args):
     from .store import Store
     Store(args.db)
@@ -115,6 +124,12 @@ def main(argv=None) -> int:
     pg.add_argument("--db", default="research_agent.db")
     pg.add_argument("--limit", type=int, default=10)
     pg.set_defaults(func=_cmd_digest)
+
+    pw = sub.add_parser("dashboard", help="serve a read-only web dashboard and JSON API")
+    pw.add_argument("--db", default="research_agent.db")
+    pw.add_argument("--host", default="127.0.0.1")
+    pw.add_argument("--port", type=int, default=8000)
+    pw.set_defaults(func=_cmd_dashboard)
 
     pi = sub.add_parser("init-db", help="create the database")
     pi.add_argument("--db", default="research_agent.db")

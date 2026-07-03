@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>AI and Automation Feed</title>
+    <link>https://example.com/feed</link>
+    <description>Updates on AI agents and automation.</description>
+    <item>
+      <title>Agents get better at tool use</title>
+      <link>https://example.com/agents-tool-use</link>
+      <description>Models are improving at calling tools reliably in multi-step workflows.</description>
+      <pubDate>Mon, 30 Jun 2026 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>MCP servers everywhere</title>
+      <link>https://example.com/mcp-everywhere</link>
+      <description>The Model Context Protocol keeps gaining client support.</description>
+      <pubDate>Sun, 29 Jun 2026 12:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

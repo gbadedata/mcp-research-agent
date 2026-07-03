@@ -6,15 +6,17 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 [![tests](https://github.com/gbadedata/mcp-research-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/gbadedata/mcp-research-agent/actions/workflows/tests.yml)
 
-A small AI automation that collects information from web sources and turns it into a
+A small AI automation that collects information from web pages and feeds and turns it into a
 digest, built two ways from one set of tools: as an **MCP server** any agent can plug into,
-and as a **standalone tool-using Claude agent**. It fetches and parses pages, saves the
-notable items to a local database (deduplicated), and writes a short digest.
+and as a **standalone tool-using Claude agent**. It fetches and parses sources, saves the
+notable items to a local database (deduplicated), writes a short digest, and serves what it
+has collected through a read-only dashboard.
 
 > **What it demonstrates:** an MCP server exposing real tools, an agent orchestration loop
-> over the Anthropic tool-use API, web fetching and parsing, a SQLite store, and a workflow
-> that ties them together. The tools and the loop run and are tested with no API key (a
-> mock model drives the loop); the live agent runs with your key.
+> over the Anthropic tool-use API, web and RSS/Atom ingestion, a SQLite store, a small
+> FastAPI dashboard, and a workflow that ties them together. The tools, the loop, and the
+> dashboard run and are tested with no API key (a mock model drives the loop); the live
+> agent runs with your key.
 
 ---
 
@@ -27,6 +29,7 @@ notable items to a local database (deduplicated), and writes a short digest.
 - [Quick start](#quick-start)
 - [Use it as an MCP server](#use-it-as-an-mcp-server)
 - [Use it as a standalone agent](#use-it-as-a-standalone-agent)
+- [The dashboard](#the-dashboard)
 - [The offline demo](#the-offline-demo)
 - [Extending it: add a tool](#extending-it-add-a-tool)
 - [An OpenClaw / Claude Code skill](#an-openclaw--claude-code-skill)
@@ -42,13 +45,14 @@ Most useful automation is unglamorous plumbing: pull from some sources, keep wha
 drop duplicates, hand back something readable, and do it again tomorrow without breaking.
 The interesting question is how to structure that so it is not throwaway. This project
 answers it with one idea: write the tools once, then let them be driven either by a person's
-agent client over MCP or by an autonomous loop, and make the whole thing runnable and
-testable without spending a single API call. The task here is a research digest, but the
-shape is the point.
+agent client over MCP or by an autonomous loop, expose the results through a small
+dashboard, and make the whole thing runnable and testable without spending a single API
+call. The task here is a research digest, but the shape is the point.
 
 ## Architecture
 
-One set of tools, two front ends, no duplication.
+One set of tools, three surfaces (an MCP server, an agent loop, a read-only dashboard), no
+duplication.
 
 ```mermaid
 flowchart TD
@@ -59,26 +63,30 @@ flowchart TD
     subgraph TOOLS["Shared tools · tools.py"]
         direction LR
         F["fetch_url"]
+        FE["fetch_feed"]
         S["save_item"]
         L["list_items"]
         SR["search_items"]
     end
     F --> WEB["Web pages"]
+    FE --> FEEDS["RSS / Atom feeds"]
     S --> STORE[("SQLite store")]
     L --> STORE
     SR --> STORE
     STORE --> DIGEST["Digest"]
+    STORE --> DASH["Read-only dashboard<br/>+ JSON API (FastAPI)"]
 ```
 
 | Module | Responsibility |
 |---|---|
-| `tools.py` | The tools: `fetch_url` (http(s) and file://), `save_item`, `list_items`, `search_items` |
+| `tools.py` | The tools: `fetch_url`, `fetch_feed` (RSS/Atom), `save_item`, `list_items`, `search_items` |
 | `store.py` | SQLite persistence, deduplicated on URL |
-| `mcp_server.py` | Exposes the tools over MCP via FastMCP (front end 1) |
-| `agent.py` | Anthropic tool-use loop that drives the tools toward a goal (front end 2) |
+| `mcp_server.py` | Exposes the tools over MCP via FastMCP (surface 1) |
+| `agent.py` | Anthropic tool-use loop that drives the tools toward a goal (surface 2) |
+| `dashboard.py` | Read-only web dashboard and JSON API over the store, via FastAPI (surface 3) |
 | `llm.py` | Anthropic client wrapper, and a `MockLLM` so the loop runs with no key |
 | `digest.py` | A deterministic, no-LLM digest of what has been collected |
-| `cli.py` | `demo`, `run`, `serve`, `digest`, `tools`, `init-db` |
+| `cli.py` | `demo`, `run`, `serve`, `dashboard`, `digest`, `tools`, `init-db` |
 
 ## The agent loop
 
@@ -152,8 +160,8 @@ Register it with an MCP-capable client. For Claude Desktop, add to the config:
 }
 ```
 
-The client can then call `fetch_url`, `save_item`, `list_items`, and `search_items`
-directly.
+The client can then call `fetch_url`, `fetch_feed`, `save_item`, `list_items`, and
+`search_items` directly.
 
 ## Use it as a standalone agent
 
@@ -162,11 +170,27 @@ With `ANTHROPIC_API_KEY` set, the agent runs the live tool-use loop:
 ```bash
 export ANTHROPIC_API_KEY=sk-...
 python -m research_agent.cli run \
-  --url https://example.com/page-1 \
-  --url https://example.com/page-2
+  --url https://example.com/page \
+  --url https://example.com/feed.xml
 ```
 
-It fetches each source, saves the notable items, and prints a digest.
+It reads each source (a page or a feed), saves the notable items, and prints a digest.
+
+## The dashboard
+
+The collected items get a viewable surface: a read-only dashboard and a JSON API.
+
+```bash
+python -m research_agent.cli dashboard      # serves on http://127.0.0.1:8000
+```
+
+- `GET /` renders a simple page listing the items.
+- `GET /api/items` returns the items as JSON.
+- `GET /api/digest` returns the deterministic digest as JSON.
+
+It is read-only and takes an explicit store, so it is safe to run while the agent or an MCP
+client writes to the same database, and it is covered by the tests through the FastAPI test
+client.
 
 ## The offline demo
 
@@ -187,8 +211,8 @@ Research digest (2 of 2 items):
 
 ## Extending it: add a tool
 
-Because the tools are shared, a new capability is added in one place and both front ends
-gain it:
+Because the tools are shared, a new capability is added in one place and every surface gains
+it:
 
 ```python
 # 1) implement it in tools.py
@@ -203,7 +227,8 @@ def summarise_text(text: str, max_sentences: int = 3) -> dict:
 # 3) add its schema to TOOL_SCHEMAS and its entry to _dispatch in agent.py
 ```
 
-The MCP client and the agent both pick it up; nothing else changes.
+The MCP client and the agent both pick it up; nothing else changes. (`fetch_feed` was added
+exactly this way.)
 
 ## An OpenClaw / Claude Code skill
 
@@ -214,42 +239,46 @@ skills can run the digest workflow with no extra code.
 
 ## Design decisions
 
-- **One set of tools, two front ends.** The MCP server and the standalone agent call the
-  same functions, so behaviour cannot drift between them, and a new tool lands in both at
-  once.
+- **One set of tools, three surfaces.** The MCP server, the standalone agent, and the
+  dashboard all build on the same functions, so behaviour cannot drift between them, and a
+  new tool lands everywhere at once.
 - **Runs with and without a key.** The `MockLLM` makes the whole orchestration testable and
   demonstrable offline; the live path is one class away.
 - **Idempotent by design.** Items are deduplicated on URL, so the automation can run on a
   schedule against the same sources without piling up duplicates.
 - **A no-LLM path exists.** When a model is not warranted, the deterministic `digest`
-  command renders what is stored. Reaching for the simplest thing that works is deliberate.
+  command and the dashboard render what is stored. Reaching for the simplest thing that
+  works is deliberate.
 - **Tool errors do not stop the run.** A failed tool call is passed back to the model as an
   error so it can adapt, rather than crashing the loop.
 
 ## Limitations
 
-- **Fetching is simple.** It reads static HTML; it does not render JavaScript. A headless
-  browser would be the next step for dynamic pages.
-- **The live agent needs an API key** and is not exercised in CI; the offline loop and all
-  tools are.
-- **The store is local SQLite**, suited to a single-user automation rather than a shared
-  service.
+- **`fetch_url` reads static HTML** and does not render JavaScript; RSS and Atom feeds are
+  handled by `fetch_feed`. A headless browser would be the next step for JavaScript-heavy
+  pages.
+- **The live agent needs an API key** and is not exercised in CI; the offline loop, the
+  tools, and the dashboard are.
+- **The store is local SQLite and the dashboard is read-only**, which suits a single-node
+  automation rather than a large multi-writer service.
 
 ## Project structure
 
 ```
 mcp-research-agent/
 ├── research_agent/
-│   ├── tools.py         # fetch_url, save_item, list_items, search_items
+│   ├── tools.py         # fetch_url, fetch_feed, save_item, list_items, search_items
 │   ├── store.py         # SQLite, deduplicated on URL
-│   ├── mcp_server.py    # FastMCP server (MCP front end)
-│   ├── agent.py         # Anthropic tool-use loop (agent front end)
+│   ├── mcp_server.py    # FastMCP server (MCP surface)
+│   ├── agent.py         # Anthropic tool-use loop (agent surface)
+│   ├── dashboard.py     # read-only FastAPI dashboard + JSON API (dashboard surface)
 │   ├── llm.py           # Anthropic wrapper + MockLLM
 │   ├── digest.py        # deterministic no-LLM digest
-│   └── cli.py           # demo, run, serve, digest, tools, init-db
+│   └── cli.py           # demo, run, serve, dashboard, digest, tools, init-db
 ├── skills/research-digest/SKILL.md   # OpenClaw / Claude Code style skill
 ├── examples/sample_page.html         # used by the offline demo and tests
-├── tests/                            # 12 tests: store, tools, agent loop, MCP registration
+├── tests/                            # 17 tests: store, tools, feeds, agent loop, MCP, dashboard
+│   └── fixtures/sample_feed.xml
 ├── requirements.txt
 └── LICENSE
 ```
@@ -257,13 +286,13 @@ mcp-research-agent/
 ## Tests
 
 ```bash
-python -m pytest -q      # 12 tests
+python -m pytest -q      # 17 tests
 ```
 
-They cover the store and its deduplication, the tools (including parsing a real page from a
-local fixture), the agent loop end to end with the MockLLM (tool calls, error handling,
-max-steps), and that the MCP server registers its tools. Run in CI on Python 3.10, 3.11 and
-3.12.
+They cover the store and its deduplication, the tools (including parsing a real page and a
+real feed from local fixtures), the agent loop end to end with the MockLLM (tool calls,
+error handling, max-steps), that the MCP server registers its tools, and the dashboard's API
+and HTML through the FastAPI test client. Run in CI on Python 3.10, 3.11 and 3.12.
 
 ## License
 

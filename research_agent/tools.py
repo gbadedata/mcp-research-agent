@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from urllib.parse import urljoin, urlparse
 
+import feedparser
 import requests
 from bs4 import BeautifulSoup
 
@@ -54,3 +55,22 @@ def list_items(store: Store, limit: int = 10) -> dict:
 
 def search_items(store: Store, query: str, limit: int = 10) -> dict:
     return {"query": query, "items": store.search_items(query, limit)}
+
+
+def fetch_feed(url: str, limit: int = 10) -> dict:
+    """Parse an RSS or Atom feed and return its recent entries.
+
+    Broadens ingestion beyond single HTML pages: many sources worth monitoring publish a
+    feed. Handles file:// for offline use and tests."""
+    src = urlparse(url).path if url.startswith("file://") else url
+    parsed = feedparser.parse(src)
+    entries = []
+    for entry in parsed.entries[:limit]:
+        summary = (entry.get("summary") or "")
+        entries.append({
+            "title": entry.get("title", ""),
+            "link": entry.get("link", ""),
+            "summary": " ".join(summary.split())[:500],
+            "published": entry.get("published", entry.get("updated", "")),
+        })
+    return {"feed_title": parsed.feed.get("title", ""), "count": len(entries), "entries": entries}
