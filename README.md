@@ -13,10 +13,10 @@ notable items to a local database (deduplicated), writes a short digest, and ser
 has collected through a read-only dashboard.
 
 > **What it demonstrates:** an MCP server exposing real tools, an agent orchestration loop
-> over the Anthropic tool-use API, web and RSS/Atom ingestion, a SQLite store, a small
-> FastAPI dashboard, and a workflow that ties them together. The tools, the loop, and the
-> dashboard run and are tested with no API key (a mock model drives the loop); the live
-> agent runs with your key.
+> over the Anthropic tool-use API, web, headless-browser, and RSS/Atom ingestion, a SQLite
+> store, a small FastAPI dashboard, and a workflow that ties them together. The tools, the
+> loop, and the dashboard run and are tested with no API key (a mock model drives the loop);
+> the live agent runs with your key.
 
 ---
 
@@ -63,12 +63,14 @@ flowchart TD
     subgraph TOOLS["Shared tools · tools.py"]
         direction LR
         F["fetch_url"]
+        FR["fetch_rendered"]
         FE["fetch_feed"]
         S["save_item"]
         L["list_items"]
         SR["search_items"]
     end
     F --> WEB["Web pages"]
+    FR --> JS["JS-heavy pages<br/>(headless browser)"]
     FE --> FEEDS["RSS / Atom feeds"]
     S --> STORE[("SQLite store")]
     L --> STORE
@@ -79,7 +81,7 @@ flowchart TD
 
 | Module | Responsibility |
 |---|---|
-| `tools.py` | The tools: `fetch_url`, `fetch_feed` (RSS/Atom), `save_item`, `list_items`, `search_items` |
+| `tools.py` | The tools: `fetch_url`, `fetch_rendered` (headless browser), `fetch_feed` (RSS/Atom), `save_item`, `list_items`, `search_items` |
 | `store.py` | SQLite persistence, deduplicated on URL |
 | `mcp_server.py` | Exposes the tools over MCP via FastMCP (surface 1) |
 | `agent.py` | Anthropic tool-use loop that drives the tools toward a goal (surface 2) |
@@ -130,6 +132,15 @@ pip install -r requirements.txt
 ```
 
 Requires Python 3.10 or newer (an MCP SDK requirement).
+
+For JavaScript-heavy pages, the optional `fetch_rendered` tool needs a browser:
+
+```bash
+pip install playwright && playwright install chromium
+```
+
+The rest of the toolkit works without it; `fetch_rendered` returns a clear message if it is
+not installed.
 
 ## Quick start
 
@@ -254,20 +265,22 @@ skills can run the digest workflow with no extra code.
 
 ## Limitations
 
-- **`fetch_url` reads static HTML** and does not render JavaScript; RSS and Atom feeds are
-  handled by `fetch_feed`. A headless browser would be the next step for JavaScript-heavy
-  pages.
-- **The live agent needs an API key** and is not exercised in CI; the offline loop, the
-  tools, and the dashboard are.
-- **The store is local SQLite and the dashboard is read-only**, which suits a single-node
-  automation rather than a large multi-writer service.
+- **JavaScript pages** are handled by `fetch_rendered`, which drives a headless browser
+  (optional Playwright). `fetch_url` stays the lightweight default for static HTML, and RSS
+  and Atom feeds go through `fetch_feed`.
+- **The live agent** is covered by a gated integration test that runs when `ANTHROPIC_API_KEY`
+  is set (locally or as a CI secret) and is skipped otherwise, so the public CI stays green
+  and free; the offline loop, the tools, and the dashboard always run.
+- **The store is local SQLite and the dashboard is read-only.** This is a deliberate fit for
+  a single-node automation, not a large multi-writer service, and swapping in a client-server
+  database would be the change to make if that need appeared.
 
 ## Project structure
 
 ```
 mcp-research-agent/
 ├── research_agent/
-│   ├── tools.py         # fetch_url, fetch_feed, save_item, list_items, search_items
+│   ├── tools.py         # fetch_url, fetch_rendered, fetch_feed, save_item, list_items, search_items
 │   ├── store.py         # SQLite, deduplicated on URL
 │   ├── mcp_server.py    # FastMCP server (MCP surface)
 │   ├── agent.py         # Anthropic tool-use loop (agent surface)
@@ -277,8 +290,8 @@ mcp-research-agent/
 │   └── cli.py           # demo, run, serve, dashboard, digest, tools, init-db
 ├── skills/research-digest/SKILL.md   # OpenClaw / Claude Code style skill
 ├── examples/sample_page.html         # used by the offline demo and tests
-├── tests/                            # 17 tests: store, tools, feeds, agent loop, MCP, dashboard
-│   └── fixtures/sample_feed.xml
+├── tests/                            # 19 tests + a gated live test: store, tools, feeds,
+│   └── fixtures/sample_feed.xml      #   browser, agent loop, MCP, dashboard
 ├── requirements.txt
 └── LICENSE
 ```
@@ -286,13 +299,15 @@ mcp-research-agent/
 ## Tests
 
 ```bash
-python -m pytest -q      # 17 tests
+python -m pytest -q      # 19 tests, plus one live test skipped without a key
 ```
 
-They cover the store and its deduplication, the tools (including parsing a real page and a
-real feed from local fixtures), the agent loop end to end with the MockLLM (tool calls,
-error handling, max-steps), that the MCP server registers its tools, and the dashboard's API
-and HTML through the FastAPI test client. Run in CI on Python 3.10, 3.11 and 3.12.
+They cover the store and its deduplication, the tools (parsing a real page and a real feed
+from local fixtures, and the browser fetcher with a mock browser), the agent loop end to end
+with the MockLLM (tool calls, error handling, max-steps), that the MCP server registers its
+tools, and the dashboard's API and HTML through the FastAPI test client. A gated live test
+exercises the real agent when `ANTHROPIC_API_KEY` is set. Run in CI on Python 3.10, 3.11 and
+3.12.
 
 ## License
 

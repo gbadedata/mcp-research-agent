@@ -10,7 +10,8 @@ from __future__ import annotations
 import json
 
 from .store import Store
-from .tools import fetch_feed, fetch_url, list_items, save_item, search_items
+from .tools import (fetch_feed, fetch_rendered, fetch_url, list_items, save_item,
+                   search_items)
 
 SYSTEM = (
     "You are a research automation agent. Use the tools to read the given sources "
@@ -29,6 +30,18 @@ TOOL_SCHEMAS = [
             "properties": {
                 "url": {"type": "string", "description": "The URL to fetch (http(s) or file://)."},
                 "max_chars": {"type": "integer", "description": "Max characters of text to return."},
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "fetch_rendered",
+        "description": "Fetch a JavaScript-heavy page with a headless browser so rendered content is included. Use only when fetch_url returns too little.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "max_chars": {"type": "integer"},
             },
             "required": ["url"],
         },
@@ -82,6 +95,7 @@ TOOL_SCHEMAS = [
 def _dispatch(store: Store) -> dict:
     return {
         "fetch_url": lambda **kw: fetch_url(**kw),
+        "fetch_rendered": lambda **kw: fetch_rendered(**kw),
         "fetch_feed": lambda **kw: fetch_feed(**kw),
         "save_item": lambda **kw: save_item(store, **kw),
         "list_items": lambda **kw: list_items(store, **kw),

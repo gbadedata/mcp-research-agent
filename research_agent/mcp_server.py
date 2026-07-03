@@ -25,6 +25,12 @@ def fetch_url(url: str, max_chars: int = 2000) -> dict:
 
 
 @mcp.tool()
+def fetch_rendered(url: str, max_chars: int = 2000) -> dict:
+    """Fetch a page with a headless browser so JavaScript-rendered content is included."""
+    return t.fetch_rendered(url, max_chars=max_chars)
+
+
+@mcp.tool()
 def save_item(source: str, title: str, url: str, summary: str = "") -> dict:
     """Save a notable item to the store. Deduplicated on URL."""
     return t.save_item(_store, source=source, title=title, url=url, summary=summary)
