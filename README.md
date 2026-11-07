@@ -37,6 +37,7 @@ has collected through a read-only dashboard.
 - [Limitations](#limitations)
 - [Project structure](#project-structure)
 - [Tests](#tests)
+- [Roadmap](#roadmap)
 - [License](#license)
 
 ## Why this exists
@@ -308,6 +309,14 @@ with the MockLLM (tool calls, error handling, max-steps), that the MCP server re
 tools, and the dashboard's API and HTML through the FastAPI test client. A gated live test
 exercises the real agent when `ANTHROPIC_API_KEY` is set. Run in CI on Python 3.10, 3.11 and
 3.12.
+
+## Roadmap
+
+Next, the same tools grow into a job-discovery pipeline: Adzuna and Reed API sources,
+job-alert email ingestion, deduplication across sources, fit scoring against configurable
+criteria, and a review queue in the dashboard. The pipeline stores job details only and
+discards recruiter contact details. The plan, broken into small testable milestones, is in
+[ROADMAP.md](ROADMAP.md).
 
 ## License
 

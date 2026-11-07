@@ -3,3 +3,9 @@ __pycache__/
 *.db
 .venv/
 .pytest_cache/
+
+# Secrets and local config never go in the repo
+.env
+.env.*
+*.key
+secrets/
