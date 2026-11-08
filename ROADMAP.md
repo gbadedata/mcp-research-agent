@@ -31,50 +31,66 @@ with the test suite green in CI.
 4. **Packaging.** Move to `pyproject.toml` with a `research-agent` console script, keeping
    `requirements.txt` for simple installs.
 
+## Milestone 0b - Safety
+
+These close the gaps listed under "Security and trust model" in the README. They come before the job
+pipeline because it will fetch far more untrusted pages.
+
+5. **Restrict `file://`.** Allow local files only under an allow-listed folder (the examples and
+   fixtures by default), for both `fetch_url` and `fetch_feed`, and return a clear error otherwise.
+6. **Block private and link-local addresses.** Resolve the host before fetching and refuse loopback,
+   private, link-local and cloud-metadata addresses, including after redirects.
+7. **Safe links in the dashboard.** Render a stored URL as a link only if its scheme is `http` or
+   `https`; show anything else as plain text.
+8. **Fetch feeds with a timeout.** Download feeds with `requests` (timeout and user agent, as
+   `fetch_url` does) and pass the body to feedparser, so a slow server cannot stall a call.
+9. **Current default model.** Move the live agent's default model to a current one and add a
+   `--model` option to `run`.
+
 ## Milestone 1 - Job sources
 
-5. **Job data model.** A `JobPosting` schema with an explicit allow-list of fields, so
+10. **Job data model.** A `JobPosting` schema with an explicit allow-list of fields, so
    contact details cannot be stored by accident.
-6. **Store migration.** A schema-version table and a simple migration runner. Add a `jobs`
+11. **Store migration.** A schema-version table and a simple migration runner. Add a `jobs`
    table alongside the existing `items` table without breaking current data.
-7. **Adzuna source.** Search by keywords and location, with pagination, retries with
+12. **Adzuna source.** Search by keywords and location, with pagination, retries with
    backoff and rate limiting. Tested against recorded responses.
-8. **Reed source.** The same for the Reed API, which uses basic auth with the key.
-9. **Credential handling.** One place that reads keys from the environment and gives a
+13. **Reed source.** The same for the Reed API, which uses basic auth with the key.
+14. **Credential handling.** One place that reads keys from the environment and gives a
    clear error when one is missing.
-10. **Alert-email ingestion.** Read unprocessed job-alert emails from a dedicated inbox over
+15. **Alert-email ingestion.** Read unprocessed job-alert emails from a dedicated inbox over
     IMAP and mark them processed. Tested against a fake mail server.
-11. **Alert parsers.** Parsers for each board's alert format (e.g. Jobserve, CWJobs), plus a
+16. **Alert parsers.** Parsers for each board's alert format (e.g. Jobserve, CWJobs), plus a
     generic fallback. Tested on sanitised email fixtures.
-12. **Personal-data filter.** Strip email addresses and phone numbers from descriptions and
+17. **Personal-data filter.** Strip email addresses and phone numbers from descriptions and
     drop contact fields. Tests prove nothing slips through.
-13. **Cross-source deduplication.** Match the same role posted on several boards by
+18. **Cross-source deduplication.** Match the same role posted on several boards by
     canonical URL, then by a fuzzy match on title, company and location.
 
 ## Milestone 2 - Scoring and review
 
-14. **Criteria config.** A TOML file with target titles, required and nice-to-have skills,
+19. **Criteria config.** A TOML file with target titles, required and nice-to-have skills,
     locations or remote, minimum pay or day rate, IR35 status and exclusions.
-15. **Rule-based fit scorer.** A score with a per-criterion breakdown, so every score can be
+20. **Rule-based fit scorer.** A score with a per-criterion breakdown, so every score can be
     explained.
-16. **Optional model-assisted scoring.** A thin hook through the existing LLM wrapper,
+21. **Optional model-assisted scoring.** A thin hook through the existing LLM wrapper,
     tested with the MockLLM, and off by default.
-17. **Application states.** discovered -> shortlisted -> applied -> interviewing ->
+22. **Application states.** discovered -> shortlisted -> applied -> interviewing ->
     offer / rejected / withdrawn. Invalid transitions are rejected and every change is
     logged.
-18. **Review queue in the dashboard.** Jobs listed by score, with actions to shortlist,
+23. **Review queue in the dashboard.** Jobs listed by score, with actions to shortlist,
     dismiss or mark as applied. The dashboard is read-only today, so this adds basic auth
     and CSRF protection for its forms.
-19. **Job detail page.** The score breakdown, status history and source links.
+24. **Job detail page.** The score breakdown, status history and source links.
 
 ## Milestone 3 - Running it day to day
 
-20. **CLI commands.** `jobs fetch`, `jobs score`, `jobs review` and `jobs status`.
-21. **Scheduled runs.** Idempotent runs with a run log, plus an example cron job and
+25. **CLI commands.** `jobs fetch`, `jobs score`, `jobs review` and `jobs status`.
+26. **Scheduled runs.** Idempotent runs with a run log, plus an example cron job and
     systemd timer.
-22. **MCP tools for jobs.** Expose job search, listing and status updates over the MCP
+27. **MCP tools for jobs.** Expose job search, listing and status updates over the MCP
     server, so an MCP client can query the pipeline.
-23. **Daily digest.** A digest of new high-scoring roles, reusing the digest module.
-24. **Logging and run summaries.** Structured logs and a short summary of each run.
-25. **Docs.** Update the README and architecture diagram for the job pipeline, including
+28. **Daily digest.** A digest of new high-scoring roles, reusing the digest module.
+29. **Logging and run summaries.** Structured logs and a short summary of each run.
+30. **Docs.** Update the README and architecture diagram for the job pipeline, including
     the data-handling rules above.
